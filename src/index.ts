@@ -7,7 +7,6 @@ import { Server, Socket } from "socket.io";
 import http from "http";
 import { handleRoomSocket } from "./chat/roomManager";
 import { handleDmSocket } from "./chat/dmManager";
-import { globalRateLimiter } from "./middlewares/rateLimiter.middleware";
 
 dotenv.config();
 
@@ -23,9 +22,6 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
-
-// Global rate limiting
-app.use("/api", globalRateLimiter);
 
 // Use Routes
 app.use("/api", routes);
