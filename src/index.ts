@@ -17,7 +17,7 @@ const app = express();
 // app.use(cors()); // Remove default CORS middleware
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
     credentials: true,
   })
 );
@@ -60,7 +60,7 @@ const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
     methods: ["GET", "POST"],
     credentials: true,
   },

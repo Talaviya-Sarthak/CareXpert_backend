@@ -2,15 +2,14 @@ import { Request, Response } from "express";
 import { UserInRequest } from "../utils/helper";
 import {
   AppointmentStatus,
-  PrismaClient,
   TimeSlotStatus,
+  Prisma,
 } from "@prisma/client";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
+import prisma from "../utils/prismClient";
 import { time } from "console";
 import doc from "pdfkit";
-
-const prisma = new PrismaClient();
 
 const viewDoctorAppointment = async (
   req: Request,
@@ -68,7 +67,7 @@ const viewDoctorAppointment = async (
       // },
     });
 
-    const formattedAppointments = appointments.map((appointment) => ({
+    const formattedAppointments = appointments.map((appointment: any) => ({
       id: appointment.id,
       status: appointment.status,
       patientName: appointment.patient.user.name,
@@ -213,15 +212,15 @@ const addTimeslot = async (req: Request, res: Response) => {
       return;
     }
 
-    await prisma.$transaction(async (prisma) => {
-      const timeSlot = await prisma.timeSlot.create({
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const timeSlot = await tx.timeSlot.create({
         data: {
           doctorId: doctor.id,
           startTime,
           endTime,
         },
       });
-      await prisma.doctor.update({
+      await tx.doctor.update({
         where: { id: doctor.id },
         data: {
           timeSlots: {
@@ -232,6 +231,125 @@ const addTimeslot = async (req: Request, res: Response) => {
     });
 
     res.status(200).json(new ApiResponse(200, "Timeslot added successfully"));
+  } catch (error) {
+    res.status(500).json(new ApiError(500, "Internal server error", [error]));
+  }
+};
+
+const generateBulkTimeSlots = async (req: Request, res: Response) => {
+  const { startDate, endDate, startTime, endTime, durationInMinutes } = req.body;
+  
+  if (!startDate || !endDate || !startTime || !endTime || !durationInMinutes) {
+    res.status(400).json(new ApiError(400, "All fields are required: startDate, endDate, startTime, endTime, durationInMinutes"));
+    return;
+  }
+
+  if (durationInMinutes <= 0 || durationInMinutes > 180) {
+    res.status(400).json(new ApiError(400, "Duration must be between 1 and 180 minutes"));
+    return;
+  }
+
+  try {
+    const userId = (req as any).user?.id;
+    const doctor = await prisma.doctor.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!doctor) {
+      res.status(400).json(new ApiError(400, "No doctor found!"));
+      return;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      res.status(400).json(new ApiError(400, "Invalid date format"));
+      return;
+    }
+
+    if (end < start) {
+      res.status(400).json(new ApiError(400, "End date must be after start date"));
+      return;
+    }
+
+    const [startHour, startMinute] = startTime.split(":").map(Number);
+    const [endHour, endMinute] = endTime.split(":").map(Number);
+
+    if (isNaN(startHour) || isNaN(startMinute) || isNaN(endHour) || isNaN(endMinute)) {
+      res.status(400).json(new ApiError(400, "Invalid time format. Use HH:mm"));
+      return;
+    }
+
+    const createdSlots: any[] = [];
+    const skippedSlots: any[] = [];
+    const currentDate = new Date(start);
+
+    // Loop through each date
+    while (currentDate <= end) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      // Generate timeslots for this date
+      let currentMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+
+      while (currentMinutes + durationInMinutes <= endMinutes) {
+        const slotStartHour = Math.floor(currentMinutes / 60);
+        const slotStartMinute = currentMinutes % 60;
+        const slotEndMinutes = currentMinutes + durationInMinutes;
+        const slotEndHour = Math.floor(slotEndMinutes / 60);
+        const slotEndMinute = slotEndMinutes % 60;
+
+        const slotStart = new Date(dateStr);
+        slotStart.setHours(slotStartHour, slotStartMinute, 0, 0);
+        
+        const slotEnd = new Date(dateStr);
+        slotEnd.setHours(slotEndHour, slotEndMinute, 0, 0);
+
+        // Check for overlap
+        const existingTimeslot = await prisma.timeSlot.findFirst({
+          where: {
+            doctorId: doctor.id,
+            startTime: { lt: slotEnd },
+            endTime: { gt: slotStart },
+          },
+          select: { id: true },
+        });
+
+        if (existingTimeslot) {
+          skippedSlots.push({
+            date: dateStr,
+            startTime: `${slotStartHour < 10 ? '0' : ''}${slotStartHour}:${slotStartMinute < 10 ? '0' : ''}${slotStartMinute}`,
+            endTime: `${slotEndHour < 10 ? '0' : ''}${slotEndHour}:${slotEndMinute < 10 ? '0' : ''}${slotEndMinute}`,
+            reason: "Overlaps with existing slot"
+          });
+        } else {
+          // Create the timeslot
+          const timeSlot = await prisma.timeSlot.create({
+            data: {
+              doctorId: doctor.id,
+              startTime: slotStart,
+              endTime: slotEnd,
+            },
+          });
+          createdSlots.push(timeSlot);
+        }
+
+        currentMinutes += durationInMinutes;
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    res.status(200).json(new ApiResponse(200, {
+      message: "Bulk timeslots generation completed",
+      created: createdSlots.length,
+      skipped: skippedSlots.length,
+      createdSlots,
+      skippedSlots
+    }));
   } catch (error) {
     res.status(500).json(new ApiError(500, "Internal server error", [error]));
   }
@@ -574,7 +692,7 @@ const getAllDoctorAppointments = async (
       },
     });
 
-    const formattedAppointments = appointments.map((appointment) => ({
+    const formattedAppointments = appointments.map((appointment: any) => ({
       id: appointment.id,
       status: appointment.status,
       appointmentType: appointment.appointmentType,
@@ -646,7 +764,7 @@ const getPendingAppointmentRequests = async (req: Request, res: Response): Promi
       },
     });
 
-    const formattedRequests = pendingRequests.map((request) => ({
+    const formattedRequests = pendingRequests.map((request: any) => ({
       id: request.id,
       status: request.status,
       appointmentType: request.appointmentType,
@@ -972,6 +1090,7 @@ export {
   viewDoctorAppointment,
   updateAppointmentStatus,
   addTimeslot,
+  generateBulkTimeSlots,
   viewTimeslots,
   cancelAppointment,
   getPatientHistory,
