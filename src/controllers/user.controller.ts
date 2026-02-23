@@ -9,6 +9,7 @@ import { Request } from "express";
 import { hash } from "crypto";
 import { isValidUUID } from "../utils/helper";
 import { TimeSlotStatus, AppointmentStatus } from "@prisma/client";
+import jwt from "jsonwebtoken";
 
 const generateToken = async (userId: string) => {
   try {
@@ -364,10 +365,9 @@ const refreshAccessToken = async (req: any, res: any) => {
     }
 
     // Verify the refresh token
-    const jwt = await import("jsonwebtoken");
     let decoded: any;
     try {
-      decoded = jwt.default.verify(
+      decoded = jwt.verify(
         incomingRefreshToken,
         process.env.REFRESH_TOKEN_SECRET as string
       );
@@ -375,6 +375,18 @@ const refreshAccessToken = async (req: any, res: any) => {
       return res
         .status(401)
         .json(new ApiError(401, "Invalid or expired refresh token"));
+    }
+
+    // Validate payload shape
+    if (
+      !decoded ||
+      typeof decoded !== "object" ||
+      typeof decoded.userId !== "string" ||
+      typeof decoded.tokenVersion !== "number"
+    ) {
+      return res
+        .status(401)
+        .json(new ApiError(401, "Invalid token payload"));
     }
 
     // Find the user and validate token version
