@@ -39,15 +39,16 @@ enum TimeSlotStatus {
 }
 
 model User {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   name           String
-  email          String   @unique
+  email          String    @unique
   profilePicture String?
   password       String
-  role           Role     @default(PATIENT)
+  role           Role      @default(PATIENT)
   refreshToken   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Role-specific relations
   patient          Patient?       @relation("PatientUser")
@@ -85,6 +86,7 @@ model Doctor {
   education      String?
   bio            String?
   languages      String[]
+  isVerified     Boolean          @default(false)
   appointments   Appointment[]    @relation("DoctorAppointments")
   prescriptions  Prescription[]
   patientHistory PatientHistory[]

@@ -17,6 +17,7 @@ import {
   markNotificationAsRead,
   addPrescriptionToAppointment,
   markAppointmentCompleted,
+  generateBulkTimeSlots,
 } from "../controllers/doctor.controller";
 import { isDoctor } from "../utils/helper";
 import { isAuthenticated } from "../middlewares/auth.middleware";
@@ -24,6 +25,7 @@ import { isAuthenticated } from "../middlewares/auth.middleware";
 const router = Router();
 
 router.post("/add-timeslot", isAuthenticated, isDoctor, addTimeslot);
+router.post("/timeslots/bulk", isAuthenticated, isDoctor, generateBulkTimeSlots);
 router.get("/view-timeslots", isAuthenticated, isDoctor, viewTimeslots);
 
 router.get("/appointments", isAuthenticated, isDoctor, viewDoctorAppointment);
