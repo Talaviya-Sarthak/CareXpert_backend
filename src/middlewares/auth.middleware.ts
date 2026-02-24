@@ -53,6 +53,16 @@ export const isAuthenticated = async (req: any, res: any, next: any) => {
           .json(new ApiError(401, "Token has been invalidated, please login again"));
       }
 
+      // Verify token version matches — rejects tokens issued before rotation
+      if (
+        decodedToken.tokenVersion !== undefined &&
+        decodedToken.tokenVersion !== user.tokenVersion
+      ) {
+        return res
+          .status(401)
+          .json(new ApiError(401, "Token has been invalidated, please login again"));
+      }
+
       // Attach the user with their role-specific data
       req.user = {
         ...user,

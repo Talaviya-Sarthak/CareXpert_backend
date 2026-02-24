@@ -23,8 +23,6 @@ const generateToken = async (userId: string) => {
     const accessToken = generateAccessToken(userId, user.tokenVersion);
     const refreshToken = generateRefreshToken(userId, user.tokenVersion);
 
-    const hashedRefresh = await bcrypt.hash(refreshToken, 10);
-
     await prisma.user.update({
       where: { id: userId },
       data: { refreshToken: hashedRefresh },
@@ -585,10 +583,10 @@ const refreshAccessToken = async (req: any, res: any) => {
         .json(new ApiError(401, "Invalid or expired refresh token"));
     }
 
-    // Validate payload shape
+    // Validate decoded token shape
     if (
-      !decoded ||
       typeof decoded !== "object" ||
+      !decoded.userId ||
       typeof decoded.userId !== "string" ||
       typeof decoded.tokenVersion !== "number"
     ) {
