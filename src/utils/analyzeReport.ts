@@ -10,13 +10,13 @@ const aiRateLimiter = new RateLimiter({
 // AI Service Configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is not set in environment variables');
+  console.warn('⚠️ GEMINI_API_KEY is not set - AI report analysis will not be available');
 }
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY as string);
+// Initialize Gemini AI (only if API key is available)
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY as string) : null;
 
-const model = genAI.getGenerativeModel({
+const model = genAI ? genAI.getGenerativeModel({
   model: 'gemini-2.0-flash',
   safetySettings: [
     {
@@ -36,7 +36,7 @@ const model = genAI.getGenerativeModel({
       threshold: HarmBlockThreshold.BLOCK_NONE,
     },
   ],
-});
+}) : null;
 
 // In-memory cache for storing analysis results
 const analysisCache = new Map<string, ReportAnalysis>();
@@ -89,6 +89,17 @@ function generateTextHash(text: string): string {
 export const analyzeReport = async (text: string, useCache: boolean = true): Promise<ReportAnalysis> => {
   if (!text?.trim()) {
     throw new AIAnalysisError('No text provided for analysis', 400);
+  }
+
+  // Check if Gemini API is available
+  if (!model || !GEMINI_API_KEY) {
+    return {
+      summary: "AI analysis is currently unavailable. Please configure GEMINI_API_KEY in your environment variables.",
+      abnormal_values: [],
+      possible_conditions: [],
+      recommendation: "Please consult with a healthcare professional to interpret your medical reports.",
+      disclaimer: "AI-powered medical report analysis is not available. This is not a substitute for professional medical advice."
+    };
   }
 
   const cacheKey = generateTextHash(text);
@@ -146,7 +157,7 @@ You MUST respond only in the following JSON format:
     const result = await chat.sendMessage([
       { text: `${prompt}\n\nMedical Report Text:\n${text}` }
     ]);
-    
+
 
     const response = await result.response;
     const responseText = await response.text();
@@ -185,7 +196,7 @@ You MUST respond only in the following JSON format:
         analysisCache.delete(firstKey);
       }
     }
-    
+
 
     return analysis;
   } catch (error) {
