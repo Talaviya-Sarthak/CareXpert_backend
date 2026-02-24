@@ -23,8 +23,6 @@ const generateToken = async (userId: string) => {
     const accessToken = generateAccessToken(userId, user.tokenVersion);
     const refreshToken = generateRefreshToken(userId, user.tokenVersion);
 
-    const hashedRefresh = await bcrypt.hash(refreshToken, 10);
-
     await prisma.user.update({
       where: { id: userId },
       data: { refreshToken: hashedRefresh },
@@ -744,7 +742,7 @@ const updatePatientProfile = async (req: any, res: Response) => {
 const updateDoctorProfile = async (req: any, res: Response) => {
   try {
     let id = (req as any).user?.doctor?.id;
-    const { specialty, clinicLocation, experience, bio, name } = req.body;
+    const { specialty, clinicLocation, experience, bio, name, education, languages } = req.body;
     const imageUrl = req.file?.path;
 
     const doctorData: {
@@ -752,11 +750,15 @@ const updateDoctorProfile = async (req: any, res: Response) => {
       clinicLocation?: string;
       experience?: string;
       bio?: string;
+      education?: string;
+      languages?: string[];
     } = {};
     if (specialty) doctorData.specialty = specialty;
     if (clinicLocation) doctorData.clinicLocation = clinicLocation;
     if (experience) doctorData.experience = experience;
     if (bio) doctorData.bio = bio;
+    if (education) doctorData.education = education;
+    if (languages) doctorData.languages = Array.isArray(languages) ? languages : [languages];
 
     const doctor = await prisma.doctor.update({
       where: { id },

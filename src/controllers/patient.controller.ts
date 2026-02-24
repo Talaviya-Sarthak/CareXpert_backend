@@ -11,24 +11,19 @@ import {
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import fs from "fs";
+import cacheService from "../utils/cacheService";
 
 const searchDoctors = async (req: any, res: Response) => {
   const { specialty, location } = req.query;
 
-  // Input validation
-  // if (!specialty && !location) {
-  //   res
-  //     .status(400)
-  //     .json(
-  //       new ApiError(
-  //         400,
-  //         "At least one search parameter (specialty or location) is required"
-  //       )
-  //     );
-  //   return;
-  // }
-
   try {
+    const cacheKey = `doctors:${specialty || 'all'}:${location || 'all'}`;
+    const cached = await cacheService.get(cacheKey);
+    
+    if (cached) {
+      return res.status(200).json(new ApiResponse(200, cached));
+    }
+
     const doctors = await prisma.doctor.findMany({
       where: {
         AND: [
@@ -36,7 +31,7 @@ const searchDoctors = async (req: any, res: Response) => {
             ? {
                 specialty: {
                   contains: specialty as string,
-                  mode: "insensitive", // Case-insensitive search
+                  mode: "insensitive",
                 },
               }
             : {},
@@ -44,13 +39,20 @@ const searchDoctors = async (req: any, res: Response) => {
             ? {
                 clinicLocation: {
                   contains: location as string,
-                  mode: "insensitive", // Case-insensitive search
+                  mode: "insensitive",
                 },
               }
             : {},
         ],
       },
-      include: {
+      select: {
+        id: true,
+        specialty: true,
+        clinicLocation: true,
+        experience: true,
+        education: true,
+        bio: true,
+        languages: true,
         user: {
           select: {
             name: true,
@@ -61,9 +63,9 @@ const searchDoctors = async (req: any, res: Response) => {
       },
     });
 
+    await cacheService.set(cacheKey, doctors, 3600);
     res.status(200).json(new ApiResponse(200, doctors));
   } catch (error) {
-    // console.error("Error in searchDoctors:", error);
     res.status(500).json(new ApiError(500, "Internal Server Error", [error]));
   }
 };
@@ -119,7 +121,6 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
       };
     }
 
-    // Fetch available time slots
     const availableSlots = await prisma.timeSlot.findMany({
       where: whereCondition,
       orderBy: {
@@ -205,17 +206,11 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
       });
 
       if (!timeSlot) {
-        res.status(404).json({
-          success: false,
-          message: "Time slot not found",
-        });
-        return;
+        throw new ApiError(404, "Time slot not found");
       }
 
       if (timeSlot.status !== TimeSlotStatus.AVAILABLE) {
-        // throw new Error("This time slot is no longer available");
-        res.status(400).json(new ApiError(400, "Timeslote is already booked"));
-        return;
+        throw new ApiError(400, "Time slot is already booked");
       }
 
       // Check if patient already has an appointment at this time
@@ -238,51 +233,54 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
       // console.log(existingAppointment)
 
       if (existingAppointment) {
-        res
-          .status(400)
-          .json(new ApiError(400, "You have already appointment in this time"));
-        return;
+        throw new ApiError(400, "You already have an appointment at this time");
       }
-      // Create appointment and update time slot status
-      const [appointment, updatedTimeSlot] = await Promise.all([
-        prisma.appointment.create({
-          data: {
-            patientId: patient.id,
-            doctorId: timeSlot.doctorId,
-            timeSlotId,
-            date: timeSlot.startTime,
-            time: timeSlot.startTime.toTimeString().slice(0, 5), // Extract HH:mm format
-            status: AppointmentStatus.PENDING,
-          },
-          include: {
-            patient: {
-              select: {
-                user: {
-                  select: {
-                    name: true,
-                  },
+
+      // Atomically mark the time slot as BOOKED to avoid race conditions
+      const updateResult = await prisma.timeSlot.updateMany({
+        where: { id: timeSlotId, status: TimeSlotStatus.AVAILABLE },
+        data: { status: TimeSlotStatus.BOOKED },
+      });
+
+      if (updateResult.count === 0) {
+        throw new ApiError(400, "Time slot is already booked");
+      }
+
+      const appointment = await prisma.appointment.create({
+        data: {
+          patientId: patient.id,
+          doctorId: timeSlot.doctorId,
+          timeSlotId,
+          date: timeSlot.startTime,
+          time: timeSlot.startTime.toTimeString().slice(0, 5),
+          status: AppointmentStatus.PENDING,
+        },
+        include: {
+          patient: {
+            select: {
+              user: {
+                select: {
+                  name: true,
                 },
               },
             },
-            doctor: {
-              select: {
-                user: {
-                  select: {
-                    name: true,
-                  },
-                },
-                specialty: true,
-                clinicLocation: true,
-              },
-            },
-            timeSlot: true,
           },
-        }),
-        prisma.timeSlot.update({
-          where: { id: timeSlotId },
-          data: { status: TimeSlotStatus.BOOKED },
-        }),
-      ]);
+          doctor: {
+            select: {
+              user: {
+                select: {
+                  name: true,
+                },
+              },
+              specialty: true,
+              clinicLocation: true,
+            },
+          },
+          timeSlot: true,
+        },
+      });
+
+      const updatedTimeSlot = await prisma.timeSlot.findUnique({ where: { id: timeSlotId } });
 
       return { appointment, updatedTimeSlot };
     });
@@ -308,6 +306,11 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
       })
     );
   } catch (error) {
+    if (error instanceof ApiError) {
+      res.status(error.statusCode).json(error);
+      return;
+    }
+
     res.status(500).json(new ApiError(500, "Internal Server Error", [error]));
   }
 };
@@ -531,6 +534,7 @@ const cancelAppointment = async (req: Request, res: Response) => {
           status: TimeSlotStatus.AVAILABLE,
         },
       });
+      await cacheService.delPattern(`timeslots:*`);
     }
     res
       .status(200)
