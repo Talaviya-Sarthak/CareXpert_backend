@@ -9,7 +9,7 @@ import { Request } from "express";
 import { hash } from "crypto";
 import { isValidUUID, validatePassword } from "../utils/helper";
 import { TimeSlotStatus, AppointmentStatus } from "@prisma/client";
-import jwt from "jsonwebtoken";
+import { sendEmail, welcomeEmailTemplate } from "../utils/emailService";
 
 const generateToken = async (userId: string) => {
   try {
@@ -152,8 +152,8 @@ const signup = async (req: Request, res: any) => {
           });
         }
       } else {
-        await tx.patient.create({
-          data: { 
+        await prisma.patient.create({
+          data: {
             userId: user.id,
             location: location || null,
           },
@@ -185,6 +185,13 @@ const signup = async (req: Request, res: any) => {
 
       return user;
     });
+
+    // Send welcome email asynchronously
+    sendEmail({
+      to: result.email,
+      subject: "Welcome to CareXpert",
+      html: welcomeEmailTemplate(result.name),
+    }).catch(err => console.error("Failed to send welcome email:", err));
 
     return res
       .status(200)
