@@ -11,24 +11,19 @@ import {
 } from "@prisma/client";
 import PDFDocument from "pdfkit";
 import fs from "fs";
+import cacheService from "../utils/cacheService";
 
 const searchDoctors = async (req: any, res: Response) => {
   const { specialty, location } = req.query;
 
-  // Input validation
-  // if (!specialty && !location) {
-  //   res
-  //     .status(400)
-  //     .json(
-  //       new ApiError(
-  //         400,
-  //         "At least one search parameter (specialty or location) is required"
-  //       )
-  //     );
-  //   return;
-  // }
-
   try {
+    const cacheKey = `doctors:${specialty || 'all'}:${location || 'all'}`;
+    const cached = await cacheService.get(cacheKey);
+    
+    if (cached) {
+      return res.status(200).json(new ApiResponse(200, cached));
+    }
+
     const doctors = await prisma.doctor.findMany({
       where: {
         AND: [
@@ -36,7 +31,7 @@ const searchDoctors = async (req: any, res: Response) => {
             ? {
                 specialty: {
                   contains: specialty as string,
-                  mode: "insensitive", // Case-insensitive search
+                  mode: "insensitive",
                 },
               }
             : {},
@@ -44,13 +39,20 @@ const searchDoctors = async (req: any, res: Response) => {
             ? {
                 clinicLocation: {
                   contains: location as string,
-                  mode: "insensitive", // Case-insensitive search
+                  mode: "insensitive",
                 },
               }
             : {},
         ],
       },
-      include: {
+      select: {
+        id: true,
+        specialty: true,
+        clinicLocation: true,
+        experience: true,
+        education: true,
+        bio: true,
+        languages: true,
         user: {
           select: {
             name: true,
@@ -61,9 +63,9 @@ const searchDoctors = async (req: any, res: Response) => {
       },
     });
 
+    await cacheService.set(cacheKey, doctors, 3600);
     res.status(200).json(new ApiResponse(200, doctors));
   } catch (error) {
-    // console.error("Error in searchDoctors:", error);
     res.status(500).json(new ApiError(500, "Internal Server Error", [error]));
   }
 };
@@ -119,7 +121,6 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
       };
     }
 
-    // Fetch available time slots
     const availableSlots = await prisma.timeSlot.findMany({
       where: whereCondition,
       orderBy: {
@@ -527,6 +528,7 @@ const cancelAppointment = async (req: Request, res: Response) => {
           status: TimeSlotStatus.AVAILABLE,
         },
       });
+      await cacheService.delPattern(`timeslots:*`);
     }
     res
       .status(200)

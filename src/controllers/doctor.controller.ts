@@ -47,7 +47,10 @@ const viewDoctorAppointment = async (
 
     const appointments = await prisma.appointment.findMany({
       where: filters,
-      include: {
+      select: {
+        id: true,
+        status: true,
+        notes: true,
         patient: {
           select: {
             user: {
@@ -58,13 +61,13 @@ const viewDoctorAppointment = async (
             },
           },
         },
-        timeSlot: true,
+        timeSlot: {
+          select: {
+            startTime: true,
+            endTime: true,
+          },
+        },
       },
-      // orderBy: {
-      //   timeSlot: {
-      //     startTime: "asc",
-      //   },
-      // },
     });
 
     const formattedAppointments = appointments.map((appointment: any) => ({
@@ -671,9 +674,21 @@ const getAllDoctorAppointments = async (
 
     const appointments = await prisma.appointment.findMany({
       where: filters,
-      include: {
+      select: {
+        id: true,
+        status: true,
+        appointmentType: true,
+        date: true,
+        time: true,
+        notes: true,
+        consultationFee: true,
+        createdAt: true,
+        updatedAt: true,
+        prescriptionId: true,
         patient: {
-          include: {
+          select: {
+            id: true,
+            medicalHistory: true,
             user: {
               select: {
                 name: true,
@@ -683,7 +698,12 @@ const getAllDoctorAppointments = async (
             },
           },
         },
-        timeSlot: true,
+        timeSlot: {
+          select: {
+            startTime: true,
+            endTime: true,
+          },
+        },
       },
       orderBy: {
         timeSlot: {
@@ -745,9 +765,19 @@ const getPendingAppointmentRequests = async (req: Request, res: Response): Promi
         doctorId: doctor.id,
         status: AppointmentStatus.PENDING,
       },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        appointmentType: true,
+        date: true,
+        time: true,
+        notes: true,
+        consultationFee: true,
+        createdAt: true,
         patient: {
-          include: {
+          select: {
+            id: true,
+            medicalHistory: true,
             user: {
               select: {
                 name: true,
@@ -757,7 +787,14 @@ const getPendingAppointmentRequests = async (req: Request, res: Response): Promi
             },
           },
         },
-        timeSlot: true,
+        timeSlot: {
+          select: {
+            id: true,
+            startTime: true,
+            endTime: true,
+            consultationFee: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "asc",

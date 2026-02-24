@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 export const getRoomMessages = async (req: Request, res: Response) => {
   try {
     const { roomId } = (req as any).params;
-    const { page = 1, limit = 50 } = req.query;
+    const { cursor, limit = 50 } = req.query;
     const userId = (req as any).user?.id;
 
     if (!roomId) {
@@ -24,7 +24,6 @@ export const getRoomMessages = async (req: Request, res: Response) => {
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // Verify user is a member of the room
     const room = await prisma.room.findFirst({
       where: {
         id: roomId,
@@ -42,15 +41,18 @@ export const getRoomMessages = async (req: Request, res: Response) => {
         .json(new ApiError(403, "You are not a member of this room"));
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-
-    // Fetch messages for the specified room with pagination
     const messages = await prisma.chatMessage.findMany({
       where: {
         roomId: roomId,
-        receiverId: null, // Room messages don't have a specific receiver
+        receiverId: null,
+        ...(cursor ? { id: { lt: cursor as string } } : {}),
       },
-      include: {
+      select: {
+        id: true,
+        message: true,
+        messageType: true,
+        imageUrl: true,
+        timestamp: true,
         sender: {
           select: {
             id: true,
@@ -61,29 +63,24 @@ export const getRoomMessages = async (req: Request, res: Response) => {
         },
       },
       orderBy: {
-        timestamp: "asc",
+        timestamp: "desc",
       },
-      skip,
-      take: Number(limit),
+      take: Number(limit) + 1,
     });
 
-    const totalMessages = await prisma.chatMessage.count({
-      where: {
-        roomId: roomId,
-        receiverId: null,
-      },
-    });
+    const hasMore = messages.length > Number(limit);
+    const resultMessages = hasMore ? messages.slice(0, -1) : messages;
+    const nextCursor = hasMore ? resultMessages[resultMessages.length - 1].id : null;
 
     return res.status(200).json(
       new ApiResponse(
         200,
         {
-          messages,
+          messages: resultMessages.reverse(),
           pagination: {
-            page: Number(page),
+            nextCursor,
+            hasMore,
             limit: Number(limit),
-            total: totalMessages,
-            totalPages: Math.ceil(totalMessages / Number(limit)),
           },
         },
         "Room messages fetched successfully"
@@ -193,12 +190,8 @@ export const getDmMessages = async (req: Request, res: Response) => {
 export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
   try {
     const { otherUserId } = (req as any).params;
-    const { page = 1, limit = 50 } = req.query;
+    const { cursor, limit = 50 } = req.query;
     const userId = (req as any).user?.id;
-
-    console.log("1-on-1 Chat History - User ID:", userId);
-    console.log("1-on-1 Chat History - User Role:", (req as any).user?.role);
-    console.log("1-on-1 Chat History - Other User ID:", otherUserId);
 
     if (!otherUserId) {
       return res
@@ -216,9 +209,6 @@ export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
         .json(new ApiError(400, "Cannot chat with yourself"));
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-
-    // Fetch messages between the two users
     const messages = await prisma.chatMessage.findMany({
       where: {
         receiverId: { not: null },
@@ -232,8 +222,14 @@ export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
             receiverId: userId,
           },
         ],
+        ...(cursor ? { id: { lt: cursor as string } } : {}),
       },
-      include: {
+      select: {
+        id: true,
+        message: true,
+        messageType: true,
+        imageUrl: true,
+        timestamp: true,
         sender: {
           select: {
             id: true,
@@ -252,38 +248,24 @@ export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
         },
       },
       orderBy: {
-        timestamp: "asc",
+        timestamp: "desc",
       },
-      skip,
-      take: Number(limit),
+      take: Number(limit) + 1,
     });
 
-    const totalMessages = await prisma.chatMessage.count({
-      where: {
-        receiverId: { not: null },
-        OR: [
-          {
-            senderId: userId,
-            receiverId: otherUserId,
-          },
-          {
-            senderId: otherUserId,
-            receiverId: userId,
-          },
-        ],
-      },
-    });
+    const hasMore = messages.length > Number(limit);
+    const resultMessages = hasMore ? messages.slice(0, -1) : messages;
+    const nextCursor = hasMore ? resultMessages[resultMessages.length - 1].id : null;
 
     return res.status(200).json(
       new ApiResponse(
         200,
         {
-          messages,
+          messages: resultMessages.reverse(),
           pagination: {
-            page: Number(page),
+            nextCursor,
+            hasMore,
             limit: Number(limit),
-            total: totalMessages,
-            totalPages: Math.ceil(totalMessages / Number(limit)),
           },
         },
         "1-on-1 chat history fetched successfully"

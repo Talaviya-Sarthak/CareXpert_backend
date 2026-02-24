@@ -9,7 +9,8 @@
     "migrate": "prisma migrate dev",
     "deploy": "prisma migrate deploy",
     "studio": "prisma studio",
-    "create-admin": "node create-admin.js"
+    "create-admin": "node create-admin.js",
+    "optimize:indexes": "prisma migrate deploy"
   },
   "keywords": [],
   "author": "",

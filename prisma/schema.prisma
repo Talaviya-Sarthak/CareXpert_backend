@@ -50,6 +50,9 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@index([name])
+  @@index([email, role])
+
   // Role-specific relations
   patient          Patient?       @relation("PatientUser")
   doctor           Doctor?        @relation("DoctorUser")
@@ -127,9 +130,10 @@ model Appointment {
   patientHistory PatientHistory? // <- only declare the field here, no `@relation`
   notifications  Notification[]  @relation("AppointmentNotifications")
 
-  @@index([doctorId, date, time])
+  @@index([doctorId, status, date])
   @@index([patientId, date])
   @@index([prescriptionId])
+  @@index([status, date])
 }
 
 model Prescription {
@@ -183,7 +187,8 @@ model TimeSlot {
   appointment Appointment[] // Optional relationship for backward compatibility
 
   @@unique([doctorId, startTime])
-  @@index([doctorId, startTime])
+  @@index([doctorId, status, startTime])
+  @@index([status, startTime])
 }
 
 model ChatMessage {
