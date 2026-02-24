@@ -7,6 +7,7 @@ import { Server, Socket } from "socket.io";
 import http from "http";
 import { handleRoomSocket } from "./chat/roomManager";
 import { handleDmSocket } from "./chat/dmManager";
+import { globalRateLimiter } from "./middlewares/rateLimit";
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.use(
     credentials: true,
   })
 );
+app.use(globalRateLimiter); // Global rate limiting
 app.use(express.json());
 app.use(cookieParser());
 
