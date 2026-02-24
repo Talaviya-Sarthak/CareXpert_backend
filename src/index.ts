@@ -13,25 +13,19 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
-// app.use(cors()); // Remove default CORS middleware
 app.use(
   cors({
     origin: "http://localhost:5173",
     credentials: true,
   })
 );
-app.use(globalRateLimiter); // Global rate limiting
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
-// Global rate limiting
 app.use("/api", globalRateLimiter);
 
-// Use Routes
 app.use("/api", routes);
 
-// Global error handling middleware (must be after all routes)
 app.use(
   (
     err: any,
@@ -65,14 +59,13 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true,
   },
-  // transports: ["websocket"],
+  
 });
 
 export function setupChatSocket(io: Server) {
   io.on("connection", (socket: Socket) => {
     console.log(`User connected: ${socket.id}`);
 
-    // Temporary test message
     socket.emit("test_message", { data: "Connection successful!" });
 
     try {
@@ -90,12 +83,10 @@ export function setupChatSocket(io: Server) {
 
 setupChatSocket(io);
 
-// Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-// Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
   console.error("Uncaught Exception:", error);
   process.exit(1);

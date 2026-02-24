@@ -75,13 +75,12 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
   const date = req.query.date as string | undefined;
 
   try {
-    // Validate doctorId format
+    
     if (!doctorId || !isValidUUID(doctorId)) {
       res.status(400).json(new ApiError(400, "Invalid Doctor ID"));
       return;
     }
 
-    // Check if doctor exists
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },
     });
@@ -91,7 +90,6 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // Build where condition
     const whereCondition: any = {
       doctorId,
       status: TimeSlotStatus.AVAILABLE,
@@ -108,7 +106,6 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
         return;
       }
 
-      // Set time range for the selected date
       const startOfDay = new Date(selectedDate);
       startOfDay.setHours(0, 0, 0, 0);
 
@@ -145,7 +142,6 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
       },
     });
 
-    // Format the response
     const formattedSlots = availableSlots.map((slot) => ({
       id: slot.id,
       startTime: slot.startTime,
@@ -164,7 +160,7 @@ const availableTimeSlots = async (req: any, res: Response): Promise<void> => {
 
 const bookAppointment = async (req: any, res: Response): Promise<void> => {
   const { timeSlotId } = req.body;
-  // const patientId = req.user?.patient?.id; // Get patient ID from authenticated user
+  
   const userId = (req as any).user?.id;
   const patient = await prisma.patient.findUnique({
     where: { userId },
@@ -172,7 +168,7 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
   });
 
   try {
-    // Validate patient is logged in and has a patient profile
+    
     if (!patient) {
       res
         .status(400)
@@ -180,15 +176,13 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // Validate timeSlotId
     if (!timeSlotId) {
       res.status(400).json(new ApiError(400, "Time slot id is required"));
       return;
     }
 
-    // Use transaction to ensure atomicity
     const result = await prisma.$transaction(async (prisma) => {
-      // Get the time slot and check if it's available
+      
       const timeSlot = await prisma.timeSlot.findUnique({
         where: { id: timeSlotId },
         include: {
@@ -213,7 +207,6 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
         throw new ApiError(400, "Time slot is already booked");
       }
 
-      // Check if patient already has an appointment at this time
       const existingAppointment = await prisma.appointment.findFirst({
         where: {
           status: {
@@ -230,13 +223,11 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
           },
         },
       });
-      // console.log(existingAppointment)
-
+      
       if (existingAppointment) {
         throw new ApiError(400, "You already have an appointment at this time");
       }
 
-      // Atomically mark the time slot as BOOKED to avoid race conditions
       const updateResult = await prisma.timeSlot.updateMany({
         where: { id: timeSlotId, status: TimeSlotStatus.AVAILABLE },
         data: { status: TimeSlotStatus.BOOKED },
@@ -285,7 +276,6 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
       return { appointment, updatedTimeSlot };
     });
 
-    // Format the response
     const formattedAppointment = {
       id: result?.appointment.id,
       status: result?.appointment.status,
@@ -526,7 +516,6 @@ const cancelAppointment = async (req: Request, res: Response) => {
       },
     });
 
-    // Update time slot if it exists
     if (appointment?.timeSlotId) {
       await prisma.timeSlot.update({
         where: { id: appointment.timeSlotId },
@@ -681,7 +670,6 @@ const prescriptionPdf = async (req: Request, res: Response) => {
       .text("Doctor Information:", { continued: false });
     doc.moveDown(0.5);
 
-    // Doctor Name + Specialty
     doc
       .font("Helvetica")
       .fontSize(11)
@@ -700,9 +688,6 @@ const prescriptionPdf = async (req: Request, res: Response) => {
 
     doc.moveDown(1);
 
-    // ------------------------
-    // 3) Patient Section
-    // ------------------------
     drawHorizontalLine(doc, doc.y, "#dddddd");
     doc.moveDown(0.5);
 
@@ -725,13 +710,9 @@ const prescriptionPdf = async (req: Request, res: Response) => {
 
     doc.moveDown(1);
 
-    // ------------------------
-    // 4) Date Issued & Prescription Text
-    // ------------------------
     drawHorizontalLine(doc, doc.y, "#dddddd");
     doc.moveDown(0.5);
 
-    // Date Issued
     const formattedDate = new Date(prescription.dateIssued).toLocaleDateString(
       "en-IN",
       { day: "2-digit", month: "long", year: "numeric" }
@@ -746,11 +727,9 @@ const prescriptionPdf = async (req: Request, res: Response) => {
 
     doc.moveDown(1);
 
-    // Prescription Details Heading
     doc.font("Helvetica-Bold").fontSize(12).text("Prescription Details:");
     doc.moveDown(0.5);
 
-    // Prescription Text Box (bordered)
     const startX = doc.x;
     const boxWidth =
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -761,7 +740,6 @@ const prescriptionPdf = async (req: Request, res: Response) => {
       lineGap: 4,
     };
 
-    // Draw a light gray box background
     const boxTop = doc.y;
     const estimatedHeight =
       doc.heightOfString(prescription.prescriptionText, textOptions) + 20;
@@ -772,14 +750,12 @@ const prescriptionPdf = async (req: Request, res: Response) => {
       .fill("#cccccc")
       .restore();
 
-    // Write the prescription text inside the box
     doc
       .font("Helvetica")
       .fontSize(11)
       .fillColor("#000000")
       .text(prescription.prescriptionText, startX, boxTop, textOptions);
 
-    // Move to end of box
     doc.moveDown(2);
 
     const footerY = doc.page.height - doc.page.margins.bottom - 40;
@@ -816,7 +792,6 @@ const cityRooms = async (req: Request, res: Response) => {
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // Get all city rooms that the patient can join
     const rooms = await prisma.room.findMany({
       include: {
         members: {
@@ -849,7 +824,6 @@ const cityRooms = async (req: Request, res: Response) => {
   }
 };
 
-// New direct appointment booking functions
 const bookDirectAppointment = async (
   req: any,
   res: Response
@@ -865,7 +839,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Validate required fields
     if (!doctorId || !date || !time) {
       res
         .status(400)
@@ -873,7 +846,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Validate appointment type
     if (appointmentType && !["ONLINE", "OFFLINE"].includes(appointmentType)) {
       res
         .status(400)
@@ -883,7 +855,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Validate date format (should be YYYY-MM-DD)
     const appointmentDate = new Date(date);
     if (isNaN(appointmentDate.getTime())) {
       res
@@ -892,7 +863,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Validate time format (should be HH:mm)
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(time)) {
       res
@@ -901,7 +871,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Check if doctor exists
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },
       include: {
@@ -918,7 +887,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Check if patient exists
     const patient = await prisma.patient.findUnique({
       where: { id: patientId },
       include: {
@@ -935,7 +903,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Check if patient already has a pending appointment with this doctor
     const existingPendingAppointment = await prisma.appointment.findFirst({
       where: {
         patientId,
@@ -956,7 +923,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Check for conflicting appointments (same doctor, date, and time)
     const existingAppointment = await prisma.appointment.findFirst({
       where: {
         doctorId,
@@ -980,7 +946,6 @@ const bookDirectAppointment = async (
       return;
     }
 
-    // Create the appointment
     const appointment = await prisma.appointment.create({
       data: {
         patientId,
@@ -1015,7 +980,6 @@ const bookDirectAppointment = async (
       },
     });
 
-    // Format the response
     const formattedAppointment = {
       id: appointment.id,
       status: appointment.status,
@@ -1111,7 +1075,6 @@ const getAllPatientAppointments = async (
   }
 };
 
-// Notification functions for patients
 const getPatientNotifications = async (req: Request, res: Response): Promise<void> => {
   const userId = (req as any).user?.id;
   const { isRead } = req.query;

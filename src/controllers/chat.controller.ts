@@ -5,13 +5,9 @@ import { UserInRequest } from "../utils/helper";
 import axios from "axios";
 import { ApiResponse } from "../utils/ApiResponse";
 
-/** Validate that a string is a well-formed UUID (v4 or any RFC-4122 variant). */
 const isValidUUID = (value: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-// use shared prisma client from utils/prismClient
-
-// Controller to get messages for a room (city chat)
 export const getRoomMessages = async (req: Request, res: Response) => {
   try {
     const { roomId } = (req as any).params;
@@ -98,7 +94,6 @@ export const getRoomMessages = async (req: Request, res: Response) => {
   }
 };
 
-// Controller to get messages for a direct message chat (1-on-1)
 export const getDmMessages = async (req: Request, res: Response) => {
   try {
     const { roomId } = (req as any).params;
@@ -115,16 +110,12 @@ export const getDmMessages = async (req: Request, res: Response) => {
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // For DMs, we need to find the other user from the roomId pattern
-    // roomId format is typically "user1_user2" (sorted alphabetically)
     const userIds = roomId.split("_");
 
-    // Enforce that the roomId contains exactly two UUIDs
     if (userIds.length !== 2 || !isValidUUID(userIds[0]) || !isValidUUID(userIds[1])) {
       return res.status(400).json(new ApiError(400, "Invalid DM room ID format"));
     }
 
-    // Authorization: requesting user must be one of the two participants
     if (!userIds.includes(userId)) {
       return res
         .status(403)
@@ -133,17 +124,15 @@ export const getDmMessages = async (req: Request, res: Response) => {
 
     const otherUserId = userIds.find((id: string) => id !== userId) as string;
 
-    // Verify the other participant actually exists
     const otherUser = await prisma.user.findUnique({ where: { id: otherUserId }, select: { id: true } });
     if (!otherUser) {
       return res.status(404).json(new ApiError(404, "The other user does not exist"));
     }
 
-    // Verify user is part of this DM conversation
     const dmMessages = await prisma.chatMessage.findMany({
       where: {
-        roomId: null, // DMs don't use room IDs
-        receiverId: { not: null }, // DM messages have a specific receiver
+        roomId: null, 
+        receiverId: { not: null }, 
         OR: [
           { senderId: userId, receiverId: otherUserId },
           { senderId: otherUserId, receiverId: userId },
@@ -205,7 +194,6 @@ export const getDmMessages = async (req: Request, res: Response) => {
   }
 };
 
-// Controller to get 1-on-1 chat history between two users
 export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
   try {
     const { otherUserId } = (req as any).params;
@@ -222,7 +210,6 @@ export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // Validate otherUserId is a properly formatted UUID to prevent enumeration
     if (!isValidUUID(otherUserId)) {
       return res
         .status(400)
@@ -305,7 +292,6 @@ export const getOneOnOneChatHistory = async (req: Request, res: Response) => {
   }
 };
 
-// Controller to get city-based room chat history
 export const getCityChatHistory = async (req: Request, res: Response) => {
   try {
     const { cityName } = (req as any).params;
@@ -322,7 +308,6 @@ export const getCityChatHistory = async (req: Request, res: Response) => {
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // Find or create room for the city
     let room = await prisma.room.findFirst({
       where: {
         name: cityName,
@@ -333,7 +318,7 @@ export const getCityChatHistory = async (req: Request, res: Response) => {
     });
 
     if (!room) {
-      // Create room for the city if it doesn't exist
+      
       room = await prisma.room.create({
         data: {
           name: cityName,
@@ -346,7 +331,7 @@ export const getCityChatHistory = async (req: Request, res: Response) => {
         },
       });
     } else {
-      // Add user to room if not already a member
+      
       const isMember = room.members.some((member: { id: string }) => member.id === userId);
       if (!isMember) {
         await prisma.room.update({
@@ -362,11 +347,10 @@ export const getCityChatHistory = async (req: Request, res: Response) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Fetch messages for the city room
     const messages = await prisma.chatMessage.findMany({
       where: {
         roomId: room.id,
-        receiverId: null, // Room messages don't have a specific receiver
+        receiverId: null, 
       },
       include: {
         sender: {
@@ -419,21 +403,17 @@ export const getCityChatHistory = async (req: Request, res: Response) => {
   }
 };
 
-// Controller to get all DM conversations for a doctor
 export const getDoctorDmConversations = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    // console.log("Doctor DM Conversations - User ID:", userId);
-    // console.log("Doctor DM Conversations - User Role:", (req as any).user?.role);
-
+    
     if (!userId) {
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // Get all unique conversations where the user is either sender or receiver
     const conversations = await prisma.chatMessage.findMany({
       where: {
-        roomId: null, // Only DM messages
+        roomId: null, 
         receiverId: { not: null },
         OR: [{ senderId: userId }, { receiverId: userId }],
       },
@@ -486,7 +466,6 @@ export const getDoctorDmConversations = async (req: Request, res: Response) => {
       },
     });
 
-    // Group conversations by the other user
     const conversationMap = new Map();
 
     conversations.forEach((message: any) => {
@@ -498,15 +477,12 @@ export const getDoctorDmConversations = async (req: Request, res: Response) => {
         conversationMap.set(conversationKey, {
           otherUser,
           lastMessage: message,
-          unreadCount: 0, // You can implement unread count logic later
+          unreadCount: 0, 
         });
       }
     });
 
     const conversationList = Array.from(conversationMap.values());
-
-    // console.log("Found conversations:", conversationList.length);
-    // console.log("Conversation details:", conversationList);
 
     return res.status(200).json(
       new ApiResponse(
@@ -525,7 +501,6 @@ export const getDoctorDmConversations = async (req: Request, res: Response) => {
   }
 };
 
-// Controller to get all DM conversations for a patient
 export const getPatientDmConversations = async (
   req: Request,
   res: Response
@@ -537,10 +512,9 @@ export const getPatientDmConversations = async (
       return res.status(401).json(new ApiError(401, "User not authenticated"));
     }
 
-    // Get all unique conversations where the user is either sender or receiver
     const conversations = await prisma.chatMessage.findMany({
       where: {
-        roomId: null, // Only DM messages
+        roomId: null, 
         receiverId: { not: null },
         OR: [{ senderId: userId }, { receiverId: userId }],
       },
@@ -593,7 +567,6 @@ export const getPatientDmConversations = async (
       },
     });
 
-    // Group conversations by the other user
     const conversationMap = new Map();
 
     conversations.forEach((message: any) => {
@@ -605,7 +578,7 @@ export const getPatientDmConversations = async (
         conversationMap.set(conversationKey, {
           otherUser,
           lastMessage: message,
-          unreadCount: 0, // You can implement unread count logic later
+          unreadCount: 0, 
         });
       }
     });
@@ -652,7 +625,7 @@ export const getToken = async (req: Request, res: Response) => {
     res.status(200).json(
       new ApiResponse(200, {
         roomId: response.data.roomId,
-        token: process.env.VIDEOSDK_API_KEY,
+        token: response.data.token,
       })
     );
     return;

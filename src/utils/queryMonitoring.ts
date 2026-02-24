@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 
-const SLOW_QUERY_THRESHOLD = 100; // ms
+const SLOW_QUERY_THRESHOLD = 100; 
 
 export const queryMonitoringMiddleware: Prisma.Middleware = async (params, next) => {
   const before = Date.now();

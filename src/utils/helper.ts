@@ -4,17 +4,15 @@ import { ApiError } from "./ApiError";
 import { User } from "@prisma/client";
 import prisma from "./prismClient";
 
-// Define the user type that will be attached to the request
 export interface UserInRequest {
   id: string;
   role: Role;
   name?: string;
   email?: string;
-  // Add other common user properties here
-  [key: string]: any; // Allow additional properties
+  
+  [key: string]: any; 
 }
 
-// Extend Express Request type to include our user
 declare global {
   namespace Express {
     interface Request {
@@ -22,8 +20,6 @@ declare global {
     }
   }
 }
-
-// Role enum is imported from @prisma/client
 
 export enum AppointmentStatus {
   PENDING = "PENDING",
@@ -114,19 +110,16 @@ export const generateRandomPassword = (length: number = 12): string => {
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
   let password = "";
 
-  // Ensure at least one character from each category
-  password += charset.charAt(Math.floor(Math.random() * 26)); // Uppercase
-  password += charset.charAt(26 + Math.floor(Math.random() * 26)); // Lowercase
-  password += charset.charAt(52 + Math.floor(Math.random() * 10)); // Number
-  password += charset.charAt(62 + Math.floor(Math.random() * 8)); // Special char
+  password += charset.charAt(Math.floor(Math.random() * 26)); 
+  password += charset.charAt(26 + Math.floor(Math.random() * 26)); 
+  password += charset.charAt(52 + Math.floor(Math.random() * 10)); 
+  password += charset.charAt(62 + Math.floor(Math.random() * 8)); 
 
-  // Fill the rest randomly
   for (let i = 4; i < length; i++) {
     const randomIndex = Math.floor(Math.random() * charset.length);
     password += charset.charAt(randomIndex);
   }
 
-  // Shuffle the password
   return password
     .split("")
     .sort(() => Math.random() - 0.5)
@@ -141,7 +134,7 @@ export const generateToken = (): string => {
 };
 
 export const validateMedicalHistory = (history: string): boolean => {
-  // Basic validation - can be extended based on requirements
+  
   return history.length >= 5 && history.length <= 1000;
 };
 
@@ -184,17 +177,14 @@ export const validateSpecialty = (specialty: string): boolean => {
   return validSpecialties.includes(specialty);
 };
 
-// Appointment validation and management helpers
 export const validateAppointmentDate = (date: Date): boolean => {
   const now = new Date();
   const appointmentDate = new Date(date);
 
-  // Appointment must be in the future
   if (appointmentDate <= now) {
     return false;
   }
 
-  // Appointment must be within next 6 months
   const sixMonthsFromNow = new Date();
   sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
 
@@ -202,10 +192,9 @@ export const validateAppointmentDate = (date: Date): boolean => {
 };
 
 export const validateAppointmentNotes = (notes: string): boolean => {
-  return notes.length <= 500; // Maximum 500 characters for appointment notes
+  return notes.length <= 500; 
 };
 
-// Patient history helpers
 export const validatePatientHistoryNotes = (notes: string): boolean => {
   return notes.length >= 10 && notes.length <= 2000;
 };
@@ -220,7 +209,6 @@ export const formatPatientHistoryDate = (date: Date): string => {
   });
 };
 
-// Medical data validation helpers
 export const validateMedicalRecord = (record: {
   symptoms: string[];
   medicalHistory?: string;
@@ -252,7 +240,6 @@ export const validateMedicalRecord = (record: {
   };
 };
 
-// Doctor availability helpers
 export const generateTimeSlots = (
   startTime: string,
   endTime: string,
@@ -276,7 +263,6 @@ export const generateTimeSlots = (
   return slots;
 };
 
-// Prescription validation helpers
 export const validatePrescriptionData = (prescription: {
   prescriptionText: string;
   dateIssued: Date;
@@ -298,7 +284,6 @@ export const validatePrescriptionData = (prescription: {
   };
 };
 
-// Clinic management helpers
 export const validateClinicData = (clinic: {
   specialty: string;
   location: string;
@@ -319,7 +304,6 @@ export const validateClinicData = (clinic: {
   };
 };
 
-// Emergency contact validation
 export const validateEmergencyContact = (contact: {
   name: string;
   relationship: string;
@@ -336,7 +320,6 @@ export const validateEmergencyContact = (contact: {
   );
 };
 
-// Medical report formatting
 export const formatMedicalReport = (data: {
   patientName: string;
   doctorName: string;
@@ -367,17 +350,6 @@ export const formatMedicalReport = (data: {
   return report.join("\n");
 };
 
-/**
- * Validates password strength
- * Requirements:
- * - Minimum 8 characters
- * - At least one uppercase letter
- * - At least one lowercase letter
- * - At least one number
- * - At least one special character
- * @param password - The password to validate
- * @returns Object with isValid boolean and error message if invalid
- */
 export const validatePassword = (password: string): { isValid: boolean; message?: string } => {
   if (!password || password.trim() === "") {
     return { isValid: false, message: "Password is required" };

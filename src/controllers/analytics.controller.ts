@@ -1,24 +1,20 @@
 import { Request, Response } from "express";
+import { Role } from "@prisma/client";
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
 import prisma from "../utils/prismClient";
 
-// Helper Interface to type 'req.user' as attached by 'isAuthenticated' middleware
 interface AuthRequest extends Request {
   user?: {
     id: string;
     name: string;
     email: string;
-    role: string;
+    role: Role;
     patient?: { id: string } | null;
     doctor?: { id: string } | null;
   };
 }
 
-/**
- * Get Health Summary
- * Retrieves counts of appointments, reports, and prescriptions for the authenticated patient.
- */
 export const getHealthSummary = async (req: AuthRequest, res: Response) => {
   try {
     const patientId = req.user?.patient?.id;
@@ -48,10 +44,6 @@ export const getHealthSummary = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/**
- * Get Doctor Visit Frequency
- * Retrieves a list of preferred doctors, their specialties, and visit frequencies based on completed appointments.
- */
 export const getDoctorVisitFrequency = async (req: AuthRequest, res: Response) => {
   try {
     const patientId = req.user?.patient?.id;
@@ -78,7 +70,6 @@ export const getDoctorVisitFrequency = async (req: AuthRequest, res: Response) =
       },
     });
 
-    // Aggregate visits per doctor
     const doctorStats: Record<string, { doctorId: string; name: string; specialty: string; visitCount: number }> = {};
 
     appointments.forEach((appt) => {
@@ -105,10 +96,6 @@ export const getDoctorVisitFrequency = async (req: AuthRequest, res: Response) =
   }
 };
 
-/**
- * Get Report Trends
- * Retrieves a chronological timeline of the patient's reports, focusing on analysis results.
- */
 export const getReportTrends = async (req: AuthRequest, res: Response) => {
   try {
     const patientId = req.user?.patient?.id;
@@ -140,13 +127,9 @@ export const getReportTrends = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/**
- * Get Symptom Patterns
- * Retrieves symptom patterns from the user's AI Chat history.
- */
 export const getSymptomPatterns = async (req: AuthRequest, res: Response) => {
   try {
-    // Note: AiChat uses the base userId, not patientId
+    
     const userId = req.user?.id;
 
     if (!userId) {
@@ -164,11 +147,10 @@ export const getSymptomPatterns = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Aggregate probable causes over time to find the most common ones
     const causeFrequency: Record<string, number> = {};
     aiChats.forEach((chat) => {
       chat.probableCauses.forEach((cause) => {
-        // Normalizing the cause string (trim, lowercase) to group similar entries
+        
         const normalized = cause.trim().toLowerCase();
         causeFrequency[normalized] = (causeFrequency[normalized] || 0) + 1;
       });

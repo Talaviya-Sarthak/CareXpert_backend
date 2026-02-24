@@ -3,6 +3,7 @@ import { ApiResponse } from "../utils/ApiResponse";
 import prisma from "../utils/prismClient";
 import bcrypt from "bcrypt";
 import { Response } from "express";
+import jwt from "jsonwebtoken";
 import { generateAccessToken, generateRefreshToken } from "../utils/jwt";
 import { Prisma } from "@prisma/client";
 import { Request } from "express";
@@ -13,7 +14,7 @@ import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } fr
 
 const generateToken = async (userId: string) => {
   try {
-    // Increment tokenVersion to invalidate any previously issued tokens
+    
     const user = await prisma.user.update({
       where: { id: userId },
       data: { tokenVersion: { increment: 1 } },
@@ -25,7 +26,7 @@ const generateToken = async (userId: string) => {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { refreshToken: hashedRefresh },
+      data: { refreshToken },
     });
 
     return { accessToken, refreshToken };
@@ -33,8 +34,6 @@ const generateToken = async (userId: string) => {
     throw new ApiError(500, "Error in generating token");
   }
 };
-
-// Using Request type from Express with proper typing
 
 const signup = async (req: Request, res: any) => {
   const {
@@ -45,7 +44,7 @@ const signup = async (req: Request, res: any) => {
     role,
     specialty,
     clinicLocation,
-    location, // Patient location
+    location, 
   } = req.body;
 
   const name = `${firstName || ""} ${lastName || ""}`.trim();
@@ -81,7 +80,6 @@ const signup = async (req: Request, res: any) => {
     }
   }
 
-  // Validate password strength
   const passwordValidation = validatePassword(password);
   if (!passwordValidation.isValid) {
     return res
@@ -107,7 +105,7 @@ const signup = async (req: Request, res: any) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationToken = generateVerificationToken();
-    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); 
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.create({
@@ -133,7 +131,6 @@ const signup = async (req: Request, res: any) => {
           },
         });
 
-        // Auto-join doctor to city room based on clinic location
         if (clinicLocation) {
           let cityRoom = await tx.room.findFirst({
             where: { name: clinicLocation },
@@ -145,7 +142,6 @@ const signup = async (req: Request, res: any) => {
             });
           }
 
-          // Add user to the city room
           await tx.room.update({
             where: { id: cityRoom.id },
             data: {
@@ -156,14 +152,13 @@ const signup = async (req: Request, res: any) => {
           });
         }
       } else {
-        await prisma.patient.create({
+        await tx.patient.create({
           data: {
             userId: user.id,
             location: location || null,
           },
         });
 
-        // Auto-join patient to city room based on location
         if (location) {
           let cityRoom = await tx.room.findFirst({
             where: { name: location },
@@ -175,7 +170,6 @@ const signup = async (req: Request, res: any) => {
             });
           }
 
-          // Add user to the city room
           await tx.room.update({
             where: { id: cityRoom.id },
             data: {
@@ -190,12 +184,11 @@ const signup = async (req: Request, res: any) => {
       return user;
     });
 
-    // Send verification email
     try {
       await sendVerificationEmail(result.email, result.name, verificationToken);
     } catch (emailError) {
       console.error("Failed to send verification email:", emailError);
-      // Continue even if email fails, user account is created
+      
     }
 
     return res
@@ -220,7 +213,6 @@ const signup = async (req: Request, res: any) => {
   }
 };
 
-// Email Verification endpoint
 const verifyEmail = async (req: Request, res: any) => {
   try {
     const { token, email } = req.query;
@@ -259,7 +251,6 @@ const verifyEmail = async (req: Request, res: any) => {
         .json(new ApiError(400, "Verification token has expired"));
     }
 
-    // Update user to verified
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -269,7 +260,6 @@ const verifyEmail = async (req: Request, res: any) => {
       },
     });
 
-    // Send welcome email
     try {
       await sendWelcomeEmail(updatedUser.email, updatedUser.name);
     } catch (emailError) {
@@ -298,7 +288,6 @@ const verifyEmail = async (req: Request, res: any) => {
   }
 };
 
-// Resend verification email endpoint
 const resendVerificationEmail = async (req: Request, res: any) => {
   try {
     const { email } = req.body;
@@ -325,11 +314,9 @@ const resendVerificationEmail = async (req: Request, res: any) => {
         .json(new ApiResponse(200, {}, "Email is already verified"));
     }
 
-    // Generate new token
     const verificationToken = generateVerificationToken();
     const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    // Update user with new token
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -338,7 +325,6 @@ const resendVerificationEmail = async (req: Request, res: any) => {
       },
     });
 
-    // Send verification email
     try {
       await sendVerificationEmail(user.email, user.name, verificationToken);
     } catch (emailError) {
@@ -381,7 +367,6 @@ const adminSignup = async (req: Request, res: any) => {
       .json(new ApiError(400, "Name, email, and password are required"));
   }
 
-  // Validate password strength
   const passwordValidation = validatePassword(password);
   if (!passwordValidation.isValid) {
     return res
@@ -408,18 +393,18 @@ const adminSignup = async (req: Request, res: any) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Create the user
+      
       const user = await tx.user.create({
         data: {
           name: name.toLowerCase(),
           email,
           password: hashedPassword,
           role: "ADMIN",
+          isEmailVerified: true,
           profilePicture: null,
         },
       });
 
-      // Create the admin record
       const admin = await tx.admin.create({
         data: {
           userId: user.id,
@@ -452,11 +437,11 @@ const adminSignup = async (req: Request, res: any) => {
 const login = async (req: any, res: any) => {
   const { data, password } = req.body;
   try {
-    if (!data) {
-      return res.json(new ApiError(400, "username or email is required"));
+    if (!data || !password) {
+      return res.status(400).json(new ApiError(400, "username or email and password are required"));
     }
     if ([password, data].some((field) => field.trim() === "")) {
-      return res.json(new ApiError(400, "All field required"));
+      return res.status(400).json(new ApiError(400, "All fields are required"));
     }
 
     const user = await prisma.user.findFirst({
@@ -487,7 +472,6 @@ const login = async (req: any, res: any) => {
         .json(new ApiError(401, "Invalid username or password"));
     }
 
-    // Check if email is verified
     if (!user.isEmailVerified) {
       return res
         .status(403)
@@ -499,12 +483,10 @@ const login = async (req: any, res: any) => {
 
     const { accessToken, refreshToken } = await generateToken(user.id);
 
-    // const {password , ...loggedInUser} = user;
-
     const options = {
-      httpOnly: true, //only modified by server
+      httpOnly: true, 
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const, // Added SameSite policy
+      sameSite: "lax" as const, 
     };
 
     return res
@@ -534,7 +516,6 @@ const logout = async (req: any, res: any) => {
   try {
     const id = (req as any).user.id;
 
-    // Increment tokenVersion to invalidate all existing tokens and clear stored refresh token
     await prisma.user.update({
       where: { id },
       data: {
@@ -546,7 +527,7 @@ const logout = async (req: any, res: any) => {
     const options = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const, // Added SameSite policy
+      sameSite: "lax" as const, 
     };
 
     return res
@@ -570,7 +551,6 @@ const refreshAccessToken = async (req: any, res: any) => {
         .json(new ApiError(401, "Refresh token is required"));
     }
 
-    // Verify the refresh token
     let decoded: any;
     try {
       decoded = jwt.verify(
@@ -583,7 +563,6 @@ const refreshAccessToken = async (req: any, res: any) => {
         .json(new ApiError(401, "Invalid or expired refresh token"));
     }
 
-    // Validate decoded token shape
     if (
       typeof decoded !== "object" ||
       !decoded.userId ||
@@ -595,7 +574,6 @@ const refreshAccessToken = async (req: any, res: any) => {
         .json(new ApiError(401, "Invalid token payload"));
     }
 
-    // Find the user and validate token version
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: { id: true, refreshToken: true, tokenVersion: true },
@@ -605,21 +583,18 @@ const refreshAccessToken = async (req: any, res: any) => {
       return res.status(401).json(new ApiError(401, "User not found"));
     }
 
-    // Check if the stored refresh token matches the incoming one
     if (user.refreshToken !== incomingRefreshToken) {
       return res
         .status(401)
         .json(new ApiError(401, "Refresh token has been revoked"));
     }
 
-    // Check if the token version matches — prevents reuse of old tokens
     if (decoded.tokenVersion !== user.tokenVersion) {
       return res
         .status(401)
         .json(new ApiError(401, "Token version mismatch, please login again"));
     }
 
-    // Rotate: generate new tokens with incremented version
     const { accessToken, refreshToken } = await generateToken(user.id);
 
     const options = {
@@ -651,7 +626,7 @@ const doctorProfile = async (req: Request, res: Response) => {
     const { id } = (req as any).params;
 
     if (!id || !isValidUUID(id)) {
-      res.status(400).json(new ApiError(400, "Doctor id not found"));
+      return res.status(400).json(new ApiError(400, "Doctor id not found"));
     }
 
     const doctor = await prisma.doctor.findUnique({
@@ -662,7 +637,7 @@ const doctorProfile = async (req: Request, res: Response) => {
             name: true,
             email: true,
             profilePicture: true,
-            // refreshToken: true,
+            
             createdAt: true,
           },
         },
@@ -681,7 +656,7 @@ const userProfile = async (req: Request, res: Response) => {
     const { id } = (req as any).params;
 
     if (!id || !isValidUUID(id)) {
-      res.status(400).json(new ApiError(400, "patient id no valid"));
+      return res.status(400).json(new ApiError(400, "patient id not valid"));
     }
 
     const patient = await prisma.patient.findUnique({
@@ -692,7 +667,7 @@ const userProfile = async (req: Request, res: Response) => {
             name: true,
             email: true,
             profilePicture: true,
-            // refreshToken: true,
+            
             createdAt: true,
           },
         },
@@ -725,7 +700,7 @@ const updatePatientProfile = async (req: any, res: Response) => {
         email: true,
         profilePicture: true,
         role: true,
-        // refreshToken: true,
+        
         createdAt: true,
       },
     });
@@ -778,7 +753,7 @@ const updateDoctorProfile = async (req: any, res: Response) => {
         email: true,
         profilePicture: true,
         role: true,
-        // refreshToken: true,
+        
         createdAt: true,
         doctor: true,
       },
@@ -806,7 +781,6 @@ const getAuthenticatedUserProfile = async (
       return;
     }
 
-    // 1. Fetch basic user data
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -820,13 +794,13 @@ const getAuthenticatedUserProfile = async (
     });
 
     if (!user) {
-      // This case should ideally not happen if isAuthenticated works correctly
+      
       res.status(404).json(new ApiError(404, "User not found"));
       return;
     }
 
     let relatedProfileData = null;
-    // 2. Conditionally fetch related profile data based on role
+    
     if (user.role === "PATIENT") {
       relatedProfileData = await prisma.patient.findUnique({
         where: { userId: user.id },
@@ -839,7 +813,6 @@ const getAuthenticatedUserProfile = async (
       });
     }
 
-    // 3. Combine user data with related profile data
     const fullUserProfile = {
       ...user,
       ...(relatedProfileData && user.role === "PATIENT"
@@ -867,7 +840,6 @@ const getAuthenticatedUserProfile = async (
   }
 };
 
-// Notifications API
 const getNotifications = async (req: any, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -979,7 +951,6 @@ const markAllNotificationsAsRead = async (req: any, res: Response) => {
   }
 };
 
-// Community API
 const getCommunityMembers = async (req: any, res: Response) => {
   try {
     const { roomId } = req.params;
@@ -1057,7 +1028,6 @@ const joinCommunity = async (req: any, res: Response) => {
       return;
     }
 
-    // Check if user is already a member
     const existingMember = await prisma.room.findFirst({
       where: {
         id: roomId,
@@ -1074,7 +1044,6 @@ const joinCommunity = async (req: any, res: Response) => {
       return;
     }
 
-    // Add user to the community
     await prisma.room.update({
       where: { id: roomId },
       data: {
@@ -1107,7 +1076,6 @@ const leaveCommunity = async (req: any, res: Response) => {
       return;
     }
 
-    // Remove user from the community
     await prisma.room.update({
       where: { id: roomId },
       data: {

@@ -4,10 +4,6 @@ import { ApiResponse } from "../utils/ApiResponse";
 import prisma from "../utils/prismClient";
 import { isValidUUID } from "../utils/helper";
 
-/**
- * Log a new symptom for the authenticated patient
- * POST /symptom/log
- */
 export const logSymptom = async (req: any, res: Response): Promise<void> => {
   try {
     const user = req.user;
@@ -19,7 +15,6 @@ export const logSymptom = async (req: any, res: Response): Promise<void> => {
 
     const { symptomText } = req.body;
 
-    // Validation
     if (!symptomText || typeof symptomText !== "string" || symptomText.trim() === "") {
       res
         .status(400)
@@ -29,7 +24,6 @@ export const logSymptom = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // Create the symptom
     const symptom = await prisma.symptom.create({
       data: {
         symptomText: symptomText.trim(),
@@ -48,10 +42,6 @@ export const logSymptom = async (req: any, res: Response): Promise<void> => {
   }
 };
 
-/**
- * Get all logged symptoms for the authenticated patient
- * GET /symptom/history
- */
 export const getSymptomHistory = async (req: any, res: Response): Promise<void> => {
   try {
     const user = req.user;
@@ -61,13 +51,12 @@ export const getSymptomHistory = async (req: any, res: Response): Promise<void> 
       return;
     }
 
-    // Retrieve all symptoms for the patient
     const symptoms = await prisma.symptom.findMany({
       where: {
         patientId: user.patient.id,
       },
       orderBy: {
-        symptomText: "asc", // Order alphabetically, adjust as needed
+        symptomText: "asc", 
       },
     });
 
@@ -82,10 +71,6 @@ export const getSymptomHistory = async (req: any, res: Response): Promise<void> 
   }
 };
 
-/**
- * Delete a logged symptom by ID (only if it belongs to the authenticated patient)
- * DELETE /symptom/:symptomId
- */
 export const deleteSymptom = async (req: any, res: Response): Promise<void> => {
   try {
     const user = req.user;
@@ -96,13 +81,11 @@ export const deleteSymptom = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // Validate symptomId format
     if (!symptomId || !isValidUUID(symptomId)) {
       res.status(400).json(new ApiError(400, "Invalid symptom ID"));
       return;
     }
 
-    // Check if symptom exists and belongs to the patient
     const symptom = await prisma.symptom.findUnique({
       where: { id: symptomId },
     });
@@ -112,7 +95,6 @@ export const deleteSymptom = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // Privacy check: ensure the symptom belongs to the authenticated patient
     if (symptom.patientId !== user.patient.id) {
       res
         .status(403)
@@ -122,7 +104,6 @@ export const deleteSymptom = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // Delete the symptom
     await prisma.symptom.delete({
       where: { id: symptomId },
     });

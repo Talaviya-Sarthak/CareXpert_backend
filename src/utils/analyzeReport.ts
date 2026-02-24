@@ -1,13 +1,11 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { RateLimiter } from 'limiter';
 
-// Rate limiting: 5 requests per second
 const aiRateLimiter = new RateLimiter({
   tokensPerInterval: 5,
   interval: 'second'
 });
 
-// AI Service Configuration
 const getGeminiApiKey = () => {
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   if (!GEMINI_API_KEY) {
@@ -16,7 +14,6 @@ const getGeminiApiKey = () => {
   return GEMINI_API_KEY;
 };
 
-// Initialize Gemini AI
 const getGenAI = () => {
   const apiKey = getGeminiApiKey();
   return new GoogleGenerativeAI(apiKey);
@@ -47,10 +44,8 @@ const getModel = () => {
   });
 };
 
-// In-memory cache for storing analysis results
 const analysisCache = new Map<string, ReportAnalysis>();
 
-// Type Definitions
 export interface AbnormalValue {
   term: string;
   value: string;
@@ -66,7 +61,6 @@ export interface ReportAnalysis {
   disclaimer: string;
 }
 
-// Custom Error Class
 class AIAnalysisError extends Error {
   constructor(
     message: string,
@@ -78,30 +72,22 @@ class AIAnalysisError extends Error {
   }
 }
 
-// Generates a simple hash for caching
 function generateTextHash(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash; 
   }
   return hash.toString();
 }
 
-/**
- * Analyzes medical report text using Gemini AI
- * @param text The extracted text from the medical report
- * @param useCache Whether to use cached results
- * @returns Promise resolving to the analysis result
- */
 export const analyzeReport = async (text: string, useCache: boolean = true): Promise<ReportAnalysis> => {
   if (!text?.trim()) {
     throw new AIAnalysisError('No text provided for analysis', 400);
   }
 
-  // Check if Gemini API is available
-  if (!model || !GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return {
       summary: "AI analysis is currently unavailable. Please configure GEMINI_API_KEY in your environment variables.",
       abnormal_values: [],
@@ -118,7 +104,7 @@ export const analyzeReport = async (text: string, useCache: boolean = true): Pro
   }
 
   try {
-    // Apply rate limiting
+    
     await aiRateLimiter.removeTokens(1);
 
     const model = getModel();
@@ -169,7 +155,6 @@ You MUST respond only in the following JSON format:
       { text: `${prompt}\n\nMedical Report Text:\n${text}` }
     ]);
 
-
     const response = await result.response;
     const responseText = await response.text();
 
@@ -177,7 +162,6 @@ You MUST respond only in the following JSON format:
       throw new AIAnalysisError('Empty response from Gemini API', 502, true);
     }
 
-    // Extract JSON from possible markdown formatting
     let jsonResponse = responseText;
     const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
@@ -197,17 +181,14 @@ You MUST respond only in the following JSON format:
       throw new AIAnalysisError('Invalid analysis structure from Gemini API', 502, true);
     }
 
-    // Cache the result
     analysisCache.set(cacheKey, analysis);
 
-    // Limit cache size
     if (analysisCache.size > 100) {
       const firstKey = analysisCache.keys().next().value;
       if (firstKey !== undefined) {
         analysisCache.delete(firstKey);
       }
     }
-
 
     return analysis;
   } catch (error) {
@@ -220,9 +201,6 @@ You MUST respond only in the following JSON format:
   }
 };
 
-/**
- * Validates that the analysis conforms to the expected structure
- */
 function isValidAnalysis(analysis: any): analysis is ReportAnalysis {
   return (
     analysis &&
@@ -235,9 +213,6 @@ function isValidAnalysis(analysis: any): analysis is ReportAnalysis {
   );
 }
 
-/**
- * Clears the analysis cache
- */
 export const clearAnalysisCache = (): void => {
   analysisCache.clear();
 };

@@ -1,23 +1,78 @@
 import nodemailer from "nodemailer";
 import { ApiError } from "./ApiError";
 
-// Generate random verification token
 export const generateVerificationToken = (): string => {
-  return Math.random().toString(36).substring(2, 15) + 
+  return Math.random().toString(36).substring(2, 15) +
          Math.random().toString(36).substring(2, 15);
 };
 
-// Create transporter for sending emails
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || "587"),
-    secure: process.env.SMTP_PORT === "465", // true for 465, false for other ports
+    secure: process.env.SMTP_PORT === "465",
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD,
     },
   });
+};
+
+export const sendEmail = async (options: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> => {
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    });
+  } catch (error) {
+    throw new ApiError(500, "Failed to send email");
+  }
+};
+
+export const appointmentStatusTemplate = (
+  doctorName: string,
+  status: string,
+  date: string,
+  time: string,
+  reason?: string
+): string => {
+  const statusColor = status === "CONFIRMED" ? "#28a745" : "#dc3545";
+  const statusText = status === "CONFIRMED" ? "Confirmed" : "Declined";
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0;">Appointment ${statusText}</h1>
+      </div>
+      <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 10px 10px;">
+        <p>Your appointment with <strong>Dr. ${doctorName}</strong> on <strong>${date}</strong> at <strong>${time}</strong> has been <span style="color: ${statusColor}; font-weight: bold;">${statusText}</span>.</p>
+        ${reason ? `<p>Reason: ${reason}</p>` : ""}
+      </div>
+    </div>
+  `;
+};
+
+export const prescriptionTemplate = (
+  doctorName: string,
+  date: string
+): string => {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0;">New Prescription Available</h1>
+      </div>
+      <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 10px 10px;">
+        <p>Dr. <strong>${doctorName}</strong> has issued a new prescription for you on <strong>${date}</strong>.</p>
+        <p>Please log in to CareXpert to view your prescription details.</p>
+      </div>
+    </div>
+  `;
 };
 
 export const sendVerificationEmail = async (
@@ -127,6 +182,6 @@ export const sendWelcomeEmail = async (
 
   } catch (error) {
     console.error("Error sending welcome email:", error);
-    // Don't throw error here as account is already verified
+    
   }
 };

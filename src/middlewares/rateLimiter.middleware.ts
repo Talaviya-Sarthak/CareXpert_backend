@@ -2,10 +2,8 @@ import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
 import redisClient from '../utils/redis';
 
-// Memory store fallback
 const memoryStore = new Map<string, { count: number; resetTime: number }>();
 
-// Redis store implementation
 const redisStore = {
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
     try {
@@ -14,7 +12,7 @@ const redisStore = {
       const resetTime = new Date(now + windowMs);
 
       const current = await redisClient.get(key);
-      
+
       if (!current) {
         await redisClient.set(key, '1', { PX: windowMs });
         return { totalHits: 1, resetTime };
@@ -23,7 +21,6 @@ const redisStore = {
       const totalHits = await redisClient.incr(key);
       return { totalHits, resetTime };
     } catch (error) {
-      console.error('Redis store error, using memory fallback:', error);
       return memoryFallback(key);
     }
   },
@@ -31,17 +28,13 @@ const redisStore = {
   async decrement(key: string): Promise<void> {
     try {
       await redisClient.decr(key);
-    } catch (error) {
-      console.error('Redis decrement error:', error);
-    }
+    } catch (_) {}
   },
 
   async resetKey(key: string): Promise<void> {
     try {
       await redisClient.del(key);
-    } catch (error) {
-      console.error('Redis reset error:', error);
-    }
+    } catch (_) {}
   },
 };
 
@@ -60,13 +53,13 @@ function memoryFallback(key: string): { totalHits: number; resetTime: Date } {
   return { totalHits: entry.count, resetTime: new Date(entry.resetTime) };
 }
 
-// Login rate limiter (5 attempts per 15 minutes)
 export const loginRateLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
   max: parseInt(process.env.LOGIN_RATE_LIMIT || '5'),
   message: { success: false, message: 'Too many login attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req: Request) => {
     return req.body.email || req.ip || 'unknown';
   },
@@ -85,13 +78,13 @@ export const loginRateLimiter = rateLimit({
   },
 });
 
-// Authenticated user rate limiter (100 req/min)
 export const authenticatedRateLimiter = rateLimit({
   windowMs: 60000,
   max: parseInt(process.env.AUTHENTICATED_RATE_LIMIT || '100'),
   message: { success: false, message: 'Too many requests. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req: Request) => {
     return (req as any).user?.id || req.ip || 'unknown';
   },
@@ -110,13 +103,13 @@ export const authenticatedRateLimiter = rateLimit({
   },
 });
 
-// Unauthenticated user rate limiter (20 req/min)
 export const unauthenticatedRateLimiter = rateLimit({
   windowMs: 60000,
   max: parseInt(process.env.UNAUTHENTICATED_RATE_LIMIT || '20'),
   message: { success: false, message: 'Too many requests. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req: Request) => req.ip || 'unknown',
   skip: (req: Request) => !!(req as any).user,
   handler: (req: Request, res: Response) => {
@@ -133,7 +126,29 @@ export const unauthenticatedRateLimiter = rateLimit({
   },
 });
 
-// Global rate limiter (combines authenticated and unauthenticated)
+export const signupRateLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
+  max: parseInt(process.env.SIGNUP_RATE_LIMIT || '10'),
+  message: { success: false, message: 'Too many signup attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  keyGenerator: (req: Request) => req.ip || 'unknown',
+  handler: (req: Request, res: Response) => {
+    const retryAfter = Math.ceil(parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000') / 1000);
+    res.status(429).set('Retry-After', retryAfter.toString()).json({
+      success: false,
+      message: 'Too many signup attempts. Please try again later.',
+      retryAfter,
+    });
+  },
+  store: {
+    increment: (key: string) => redisStore.increment(`signup:${key}`),
+    decrement: (key: string) => redisStore.decrement(`signup:${key}`),
+    resetKey: (key: string) => redisStore.resetKey(`signup:${key}`),
+  },
+});
+
 export const globalRateLimiter = (req: Request, res: Response, next: any) => {
   if ((req as any).user) {
     return authenticatedRateLimiter(req, res, next);

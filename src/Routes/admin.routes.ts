@@ -11,7 +11,6 @@ import { isAuthenticated } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// All admin routes require authentication + admin role
 router.get("/users", isAuthenticated, isAdmin, listAllUsers);
 router.patch("/verify-doctor/:doctorUserId", isAuthenticated, isAdmin, verifyDoctor);
 router.get("/dashboard-stats", isAuthenticated, isAdmin, getDashboardStats);

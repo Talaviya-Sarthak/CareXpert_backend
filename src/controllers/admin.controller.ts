@@ -7,10 +7,6 @@ import { isValidUUID } from "../utils/helper";
 
 const VALID_ROLES: string[] = [Role.PATIENT, Role.DOCTOR, Role.ADMIN];
 
-/**
- * List all users with pagination and optional role filter.
- * Query params: page, limit, role
- */
 const listAllUsers = async (req: Request, res: Response): Promise<void> => {
     try {
         const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -18,7 +14,6 @@ const listAllUsers = async (req: Request, res: Response): Promise<void> => {
         const roleFilter = req.query.role as string | undefined;
         const skip = (page - 1) * limit;
 
-        // Validate role filter if provided
         if (roleFilter && VALID_ROLES.indexOf(roleFilter) === -1) {
             res
                 .status(400)
@@ -27,7 +22,7 @@ const listAllUsers = async (req: Request, res: Response): Promise<void> => {
         }
 
         const where: any = {
-            deletedAt: null, // Exclude soft-deleted users
+            deletedAt: null, 
         };
 
         if (roleFilter) {
@@ -89,10 +84,6 @@ const listAllUsers = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-/**
- * Verify a doctor by their user ID.
- * Sets isVerified to true on the Doctor model.
- */
 const verifyDoctor = async (req: Request, res: Response): Promise<void> => {
     const { doctorUserId } = req.params;
 
@@ -150,12 +141,6 @@ const verifyDoctor = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-/**
- * Get dashboard statistics:
- * - Total users (by role)
- * - Total appointments (by status)
- * - Total reports
- */
 const getDashboardStats = async (
     req: Request,
     res: Response
@@ -219,10 +204,6 @@ const getDashboardStats = async (
     }
 };
 
-/**
- * Soft delete a user by setting deletedAt timestamp.
- * Preserves data integrity by not removing the record.
- */
 const softDeleteUser = async (req: Request, res: Response): Promise<void> => {
     const { userId } = req.params;
     const adminUserId = (req as any).user?.id;
@@ -232,7 +213,6 @@ const softDeleteUser = async (req: Request, res: Response): Promise<void> => {
         return;
     }
 
-    // Prevent admin from deleting themselves
     if (userId === adminUserId) {
         res.status(400).json(new ApiError(400, "Cannot delete your own account"));
         return;
@@ -275,10 +255,6 @@ const softDeleteUser = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-/**
- * Change a user's role.
- * Body: { role: "PATIENT" | "DOCTOR" | "ADMIN" }
- */
 const changeUserRole = async (req: Request, res: Response): Promise<void> => {
     const { userId } = req.params;
     const { role, specialty, clinicLocation, location } = req.body;
@@ -296,13 +272,11 @@ const changeUserRole = async (req: Request, res: Response): Promise<void> => {
         return;
     }
 
-    // Prevent admin from changing their own role
     if (userId === adminUserId) {
         res.status(400).json(new ApiError(400, "Cannot change your own role"));
         return;
     }
 
-    // Validate required fields when changing to DOCTOR
     if (role === Role.DOCTOR) {
         if (!specialty || !clinicLocation || specialty.trim() === "" || clinicLocation.trim() === "") {
             res.status(400).json(
@@ -329,7 +303,7 @@ const changeUserRole = async (req: Request, res: Response): Promise<void> => {
         }
 
         const updatedUser = await prisma.$transaction(async (tx) => {
-            // Update the user's role
+            
             const updated = await tx.user.update({
                 where: { id: userId },
                 data: { role: role as Role },
@@ -341,7 +315,6 @@ const changeUserRole = async (req: Request, res: Response): Promise<void> => {
                 },
             });
 
-            // Create the target role profile if it doesn't already exist
             if (role === Role.DOCTOR && !user.doctor) {
                 await tx.doctor.create({
                     data: {

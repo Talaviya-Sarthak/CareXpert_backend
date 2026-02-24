@@ -8,7 +8,6 @@ import {
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
 import prisma from "../utils/prismClient";
-import { time } from "console";
 import doc from "pdfkit";
 import { sendEmail, appointmentStatusTemplate, prescriptionTemplate } from "../utils/emailService";
 
@@ -17,7 +16,7 @@ const viewDoctorAppointment = async (
   res: Response
 ): Promise<void> => {
   const userId = (req as any).user?.id;
-  const { status, upcoming } = req.query; // status=PENDING/COMPLETED/CANCELLED, upcoming=true
+  const { status, upcoming } = req.query; 
 
   const doctor = await prisma.doctor.findUnique({
     where: { userId },
@@ -167,7 +166,6 @@ const updateAppointmentStatus = async (req: Request, res: Response) => {
         },
       });
 
-      // Send prescription email asynchronously
       sendEmail({
         to: (appointment as any).patient.user.email,
         subject: "New Prescription Available - CareXpert",
@@ -175,7 +173,7 @@ const updateAppointmentStatus = async (req: Request, res: Response) => {
           (appointment as any).doctor.user.name,
           new Date().toLocaleDateString()
         ),
-      }).catch(err => console.error("Failed to send prescription email:", err));
+      }).catch((err: unknown) => console.error("Failed to send prescription email:", err));
     }
     res
       .status(200)
@@ -317,11 +315,9 @@ const generateBulkTimeSlots = async (req: Request, res: Response) => {
     const skippedSlots: any[] = [];
     const currentDate = new Date(start);
 
-    // Loop through each date
     while (currentDate <= end) {
       const dateStr = currentDate.toISOString().split('T')[0];
       
-      // Generate timeslots for this date
       let currentMinutes = startHour * 60 + startMinute;
       const endMinutes = endHour * 60 + endMinute;
 
@@ -338,7 +334,6 @@ const generateBulkTimeSlots = async (req: Request, res: Response) => {
         const slotEnd = new Date(dateStr);
         slotEnd.setHours(slotEndHour, slotEndMinute, 0, 0);
 
-        // Check for overlap
         const existingTimeslot = await prisma.timeSlot.findFirst({
           where: {
             doctorId: doctor.id,
@@ -356,7 +351,7 @@ const generateBulkTimeSlots = async (req: Request, res: Response) => {
             reason: "Overlaps with existing slot"
           });
         } else {
-          // Create the timeslot
+          
           const timeSlot = await prisma.timeSlot.create({
             data: {
               doctorId: doctor.id,
@@ -370,7 +365,6 @@ const generateBulkTimeSlots = async (req: Request, res: Response) => {
         currentMinutes += durationInMinutes;
       }
 
-      // Move to next day
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
@@ -416,7 +410,6 @@ const cancelAppointment = async (req: Request, res: any) => {
       },
     });
 
-    // Update time slot if it exists
     if (appointment?.timeSlotId) {
       await prisma.timeSlot.update({
         where: { id: appointment.timeSlotId },
@@ -427,7 +420,7 @@ const cancelAppointment = async (req: Request, res: any) => {
     }
     return res
       .status(200)
-      .json(new ApiResponse(500, "Appointment Cancelled successfully!"));
+      .json(new ApiResponse(200, null, "Appointment Cancelled successfully!"));
   } catch (error) {
     res
       .status(500)
@@ -440,7 +433,7 @@ const cancelAppointment = async (req: Request, res: any) => {
 };
 
 const viewTimeslots = async (req: Request, res: Response) => {
-  const { status, startTime, endTime } = req.query; //status = AVAILABLE,BOOKED,CANCELLED
+  const { status, startTime, endTime } = req.query; 
   const userId = (req as any).user?.id;
 
   try {
@@ -518,7 +511,7 @@ const getPatientHistory = async (req: Request, res: Response) => {
       orderBy: { dateRecorded: "desc" },
     });
 
-    res.status(200).json(new ApiResponse(500, history));
+    res.status(200).json(new ApiResponse(200, history));
   } catch (error) {
     res.status(500).json(new ApiError(400, "Failed to fetch patient history!"));
   }
@@ -566,7 +559,7 @@ const deleteTimeSlot = async (req: Request, res: Response) => {
   try {
     const timeSlot = await prisma.timeSlot.findUnique({
       where: { id: timeSlotID },
-      include: { appointment: true }, // Include related appointments
+      include: { appointment: true }, 
     });
 
     if (!timeSlot || timeSlot.doctorId !== doctorId) {
@@ -671,7 +664,7 @@ const getAllDoctorAppointments = async (
   res: Response
 ): Promise<void> => {
   const userId = req.user?.id;
-  const { status, upcoming } = req.query; // status=PENDING/CONFIRMED/COMPLETED/CANCELLED, upcoming=true
+  const { status, upcoming } = req.query; 
 
   try {
     const doctor = await prisma.doctor.findUnique({
@@ -773,7 +766,6 @@ const getAllDoctorAppointments = async (
   }
 };
 
-// New appointment request management functions
 const getPendingAppointmentRequests = async (req: Request, res: Response): Promise<void> => {
   const userId = (req as any).user?.id;
 
@@ -862,7 +854,7 @@ const getPendingAppointmentRequests = async (req: Request, res: Response): Promi
 
 const respondToAppointmentRequest = async (req: Request, res: Response): Promise<void> => {
   const { appointmentId } = req.params;
-  const { action, rejectionReason, alternativeSlots } = req.body; // action: "accept" or "reject"
+  const { action, rejectionReason, alternativeSlots } = req.body; 
   const userId = (req as any).user?.id;
 
   try {
@@ -913,7 +905,7 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
     let notification;
 
     if (action === "accept") {
-      // Accept the appointment
+      
       updatedAppointment = await prisma.appointment.update({
         where: { id: appointmentId },
         data: {
@@ -921,7 +913,6 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
         },
       });
 
-      // Create notification for patient
       notification = await prisma.notification.create({
         data: {
           userId: appointment.patient.user.id,
@@ -932,7 +923,6 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
         },
       });
 
-      // If there's a timeSlot, mark it as booked
       if (appointment.timeSlotId) {
         await prisma.timeSlot.update({
           where: { id: appointment.timeSlotId },
@@ -941,7 +931,7 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
       }
 
     } else {
-      // Reject the appointment
+      
       updatedAppointment = await prisma.appointment.update({
         where: { id: appointmentId },
         data: {
@@ -950,7 +940,6 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
         },
       });
 
-      // Create notification for patient with alternative slots
       let message = `Your appointment request with Dr. ${doctor.user.name} has been declined.`;
       if (rejectionReason) {
         message += ` Reason: ${rejectionReason}`;
@@ -969,7 +958,6 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
         },
       });
 
-      // If there's a timeSlot, make it available again
       if (appointment.timeSlotId) {
         await prisma.timeSlot.update({
           where: { id: appointment.timeSlotId },
@@ -978,7 +966,6 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
       }
     }
 
-    // Send email to patient asynchronously
     sendEmail({
       to: appointment.patient.user.email,
       subject: action === "accept" ? "Appointment Confirmed" : "Appointment Request Declined",
@@ -989,7 +976,7 @@ const respondToAppointmentRequest = async (req: Request, res: Response): Promise
         appointment.time,
         action === "accept" ? undefined : rejectionReason
       ),
-    }).catch(err => console.error("Failed to send appointment status email:", err));
+    }).catch((err: unknown) => console.error("Failed to send appointment status email:", err));
 
     res.status(200).json(new ApiResponse(200, {
       appointment: updatedAppointment,
@@ -1069,7 +1056,6 @@ const markNotificationAsRead = async (req: Request, res: Response): Promise<void
   }
 };
 
-// Add a prescription to an appointment (text-based)
 const addPrescriptionToAppointment = async (req: Request, res: Response): Promise<void> => {
   const { appointmentId } = req.params;
   const { prescriptionText, notes } = req.body as { prescriptionText?: string; notes?: string };
@@ -1093,7 +1079,6 @@ const addPrescriptionToAppointment = async (req: Request, res: Response): Promis
       return;
     }
 
-    // Create prescription and link to appointment
     const prescription = await prisma.prescription.create({
       data: {
         doctorId: appointment.doctorId,
@@ -1118,7 +1103,7 @@ const addPrescriptionToAppointment = async (req: Request, res: Response): Promis
       }
     });
     console.log(updatedAppointment)
-    // Optional: notify patient that prescription is available
+    
     await prisma.notification.create({
       data: {
         userId: updatedAppointment.patient.userId,
@@ -1135,7 +1120,6 @@ const addPrescriptionToAppointment = async (req: Request, res: Response): Promis
   }
 };
 
-// Mark an appointment as completed
 const markAppointmentCompleted = async (req: Request, res: Response): Promise<void> => {
   const { appointmentId } = req.params;
   const doctorUserId = (req as any).user?.id;

@@ -1,5 +1,5 @@
 import express from "express";
-//import individual routes here ---
+
 import userRoute from "./user.routes";
 import doctorRoutes from "./doctor.routes";
 import patientRoutes from "./patient.routes";
@@ -12,7 +12,6 @@ import symptomRoutes from "./symptom.routes";
 
 const router = express.Router();
 
-//group all routes here---
 router.use("/user", userRoute);
 router.use("/doctor", doctorRoutes);
 router.use("/patient", patientRoutes);

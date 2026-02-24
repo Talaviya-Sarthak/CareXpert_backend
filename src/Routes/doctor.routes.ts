@@ -21,7 +21,7 @@ import {
 } from "../controllers/doctor.controller";
 import { isDoctor } from "../utils/helper";
 import { isAuthenticated } from "../middlewares/auth.middleware";
-import { globalRateLimiter } from "../middlewares/rateLimiter";
+import { globalRateLimiter } from "../middlewares/rateLimiter.middleware";
 
 const router = Router();
 
@@ -69,7 +69,6 @@ router.delete(
 router.get("/city-rooms", isAuthenticated, globalRateLimiter, isDoctor, cityRooms);
 router.put("/create-room", isAuthenticated, globalRateLimiter, isDoctor, createRoom);
 
-// New direct appointment routes
 router.get(
   "/all-appointments",
   isAuthenticated,
@@ -78,7 +77,6 @@ router.get(
   getAllDoctorAppointments as any
 );
 
-// New appointment request management routes
 router.get(
   "/pending-requests",
   isAuthenticated,
@@ -95,7 +93,6 @@ router.patch(
   respondToAppointmentRequest
 );
 
-// Prescription and completion routes
 router.post(
   "/appointments/:appointmentId/prescription",
   isAuthenticated,
@@ -111,7 +108,6 @@ router.patch(
   markAppointmentCompleted
 );
 
-// Notification routes
 router.get(
   "/notifications",
   isAuthenticated,

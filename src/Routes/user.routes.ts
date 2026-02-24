@@ -28,11 +28,9 @@ import {
   loginRateLimiter,
   signupRateLimiter,
   globalRateLimiter,
-} from "../middlewares/rateLimiter";
+} from "../middlewares/rateLimiter.middleware";
 
 const router = express.Router();
-
-/* ===================== AUTH ROUTES ===================== */
 
 router.post("/signup", signupRateLimiter, signup);
 router.post("/admin-signup", signupRateLimiter, adminSignup);
@@ -40,25 +38,21 @@ router.post("/login", loginRateLimiter, login);
 router.post("/logout", isAuthenticated, globalRateLimiter, logout);
 router.post("/refresh-token", refreshAccessToken);
 
-/* ===================== EMAIL VERIFICATION ===================== */
-
 router.get("/verify-email", verifyEmail);
 router.post("/resend-verification-email", resendVerificationEmail);
-
-/* ===================== PROFILE ROUTES ===================== */
 
 router.get(
   "/patient/profile/:id",
   isAuthenticated,
   globalRateLimiter,
-  userProfile
+  userProfile as any
 );
 
 router.get(
   "/doctor/profile/:id",
   isAuthenticated,
   globalRateLimiter,
-  doctorProfile
+  doctorProfile as any
 );
 
 router.put(
@@ -85,8 +79,6 @@ router.get(
   globalRateLimiter,
   getAuthenticatedUserProfile
 );
-
-/* ===================== NOTIFICATIONS ===================== */
 
 router.get(
   "/notifications",
@@ -115,8 +107,6 @@ router.put(
   globalRateLimiter,
   markAllNotificationsAsRead
 );
-
-/* ===================== COMMUNITY ===================== */
 
 router.get(
   "/communities/:roomId/members",

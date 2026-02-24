@@ -18,11 +18,11 @@ import {
 } from "../controllers/patient.controller";
 import { isAuthenticated } from "../middlewares/auth.middleware";
 import { isPatient } from "../utils/helper";
-import { globalRateLimiter } from "../middlewares/rateLimiter";
+import { globalRateLimiter } from "../middlewares/rateLimiter.middleware";
 
 const router = express.Router();
 
-router.get("/search-doctors", isAuthenticated, globalRateLimiter, isPatient, searchDoctors);
+router.get("/search-doctors", isAuthenticated, globalRateLimiter, isPatient, searchDoctors as any);
 router.get(
   "/:doctorId/timeSlots",
   isAuthenticated,
@@ -66,11 +66,9 @@ router.get("/prescription-pdf/:id", prescriptionPdf as any);
 router.get("/fetchAllDoctors", fetchAllDoctors);
 router.get("/city-rooms", isAuthenticated, globalRateLimiter, isPatient, cityRooms as any);
 
-// New direct appointment booking routes
 router.post("/book-direct-appointment", isAuthenticated, globalRateLimiter, isPatient, bookDirectAppointment);
 router.get("/all-appointments", isAuthenticated, globalRateLimiter, isPatient, getAllPatientAppointments);
 
-// Notification routes
 router.get("/notifications", isAuthenticated, globalRateLimiter, isPatient, getPatientNotifications);
 router.patch("/notifications/:notificationId/read", isAuthenticated, globalRateLimiter, isPatient, markNotificationAsRead);
 router.patch("/notifications/mark-all-read", isAuthenticated, globalRateLimiter, isPatient, markAllNotificationsAsRead);
